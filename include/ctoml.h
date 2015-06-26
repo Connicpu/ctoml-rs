@@ -114,7 +114,7 @@ namespace ctoml
     CTOML_API TomlTable *ParseTable(ConstBuffer input);
 
     // Serializes to a string, get the result with ValueString, you are responsible for calling FreeValue
-    CTOML_API TomlValue *SerializeTable(const TomlTable *table);
+    CTOML_API TomlValue *SerializeTable(const TomlTable *table, TomlValue **errors);
 
     // Free a table that you own
     CTOML_API void FreeTable(TomlTable *table);
