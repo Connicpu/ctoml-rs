@@ -160,10 +160,16 @@ pub extern "C" fn WrapTable(mut table: Box<toml::Table>) -> Box<TomlValue> {
 }
 
 #[no_mangle]
-pub extern "C" fn ParseTable(input: &str) -> Option<Box<toml::Table>> {
-    match toml::Parser::new(input).parse() {
+pub extern "C" fn ParseTable(input: &str, errors: Option<&mut Box<TomlValue>>) -> Option<Box<toml::Table>> {
+    let mut parser = toml::Parser::new(input);
+    match parser.parse() {
         Some(table) => Some(Box::new(table)),
-        None => None,
+        None => {
+            if let Some(errors) = errors {
+                *errors = box toml::Value::String(format!("Parse errors: {:?}", parser.errors));
+            }
+            None
+        },
     }
 }
 
