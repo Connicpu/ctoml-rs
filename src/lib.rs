@@ -155,6 +155,11 @@ pub extern "C" fn ValueDatetime(value: &TomlValue) -> &str {
 // Table functions
 
 #[no_mangle]
+pub extern "C" fn WrapTable(mut table: Box<toml::Table>) -> Box<TomlValue> {
+    box toml::Value::Table(mem::replace::<toml::Table>(&mut table, toml::Table::new()))
+}
+
+#[no_mangle]
 pub extern "C" fn ParseTable(input: &str) -> Option<Box<toml::Table>> {
     match toml::Parser::new(input).parse() {
         Some(table) => Some(Box::new(table)),

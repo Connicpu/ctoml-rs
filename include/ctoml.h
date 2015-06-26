@@ -107,6 +107,9 @@ namespace ctoml
     ////////////////////////////////////////////////////////////////////
     // Table functions
 
+    // If you have an owned table, but need a value
+    CTOML_API TomlValue *WrapTable(TomlTable *table);
+
     // Input should be UTF-8 encoded data. You own the table.
     CTOML_API TomlTable *ParseTable(ConstBuffer input);
 
