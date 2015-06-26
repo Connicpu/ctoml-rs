@@ -35,6 +35,11 @@ pub extern "C" fn ValueType(value: &TomlValue) -> TomlType {
 }
 
 #[no_mangle]
+pub extern "C" fn ValueLookup<'a>(value: &'a TomlValue, key: &'a str) -> Option<&'a TomlValue> {
+    value.lookup(key)
+}
+
+#[no_mangle]
 pub extern "C" fn FreeValue(_: Option<Box<TomlValue>>) {
     // let it drop
 }

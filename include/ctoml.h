@@ -61,6 +61,9 @@ namespace ctoml
     // Get the type of a value
     CTOML_API TomlType ValueType(const TomlValue *value);
 
+    // Lookup a value
+    CTOML_API const TomlValue *ValueLookup(const TomlValue *value, ConstBuffer path);
+
     // Free a TomlValue that you own
     CTOML_API void FreeValue(TomlValue *value);
 
