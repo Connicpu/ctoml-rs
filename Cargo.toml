@@ -1,0 +1,11 @@
+[package]
+name = "ctoml"
+version = "0.1.0"
+authors = ["Connor Hilarides <connorcpu@live.com>"]
+
+[lib]
+name = "ctoml"
+crate_type = ["dylib"]
+
+[dependencies]
+toml = "0.1"
