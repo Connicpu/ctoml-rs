@@ -8,4 +8,6 @@ name = "ctoml"
 crate_type = ["dylib"]
 
 [dependencies]
-toml = "0.1"
+toml = "^0.1"
+bson = "^0.1"
+chrono = "^0.2"

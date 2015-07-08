@@ -2,6 +2,8 @@
 #![feature(box_syntax)]
 
 extern crate toml;
+extern crate bson;
+extern crate chrono;
 
 use std::mem;
 
@@ -248,5 +250,129 @@ pub extern "C" fn ArrayPush(array: &mut toml::Array, mut value: Box<TomlValue>) 
 #[no_mangle]
 pub extern "C" fn ArrayPop(array: &mut toml::Array) {
     array.pop();
+}
+
+//////////////////////////////////////////////////////
+// JSON Functions
+
+//////////////////////////////////////////////////////
+// CSON Functions
+
+//////////////////////////////////////////////////////
+// BSON Functions
+
+fn table_to_bson(table: &toml::Table) -> bson::Document {
+    let mut doc = bson::Document::new();
+
+    for (k, v) in table.iter() {
+        doc.insert(k.clone(), toml_to_bson(v));
+    }
+
+    doc
+}
+
+fn array_to_bson(array: &toml::Array) -> bson::Array {
+    let mut ary = bson::Array::new();
+
+    for v in array.iter() {
+        ary.push(toml_to_bson(v));
+    }
+
+    ary
+}
+
+fn toml_to_bson(value: &toml::Value) -> bson::Bson {
+    use toml::Value::*;
+    use bson::Bson;
+    use std::str::FromStr;
+
+    match value {
+        &String(ref s) => Bson::String(s.clone()),
+        &Integer(i) => Bson::I64(i),
+        &Float(f) => Bson::FloatingPoint(f),
+        &Boolean(b) => Bson::Boolean(b),
+        &Datetime(ref s) => match FromStr::from_str(s) {
+            Ok(dt) => Bson::UtcDatetime(dt),
+            _ => Bson::Null
+        },
+        &Array(ref a) => Bson::Array(array_to_bson(a)),
+        &Table(ref t) => Bson::Document(table_to_bson(t)),
+    }
+}
+
+fn bson_to_table(table: &bson::Document) -> toml::Table {
+    let mut tab = toml::Table::new();
+
+    for (k, v) in table.iter() {
+        match bson_to_toml(v) {
+            Some(v) => { tab.insert(k.clone(), v); },
+            None => {}
+        }
+    }
+
+    tab
+}
+
+fn bson_to_array(array: &bson::Array) -> toml::Array {
+    let mut ary = toml::Array::new();
+
+    for v in array.iter() {
+        match bson_to_toml(v) {
+            Some(v) => { ary.push(v); },
+            None => {}
+        }
+    }
+
+    ary
+}
+
+fn bson_to_toml(value: &bson::Bson) -> Option<toml::Value> {
+    use bson::Bson::*;
+
+    match value {
+        &Document(ref doc) => Some(toml::Value::Table(bson_to_table(doc))),
+        &Array(ref ary) => Some(toml::Value::Array(bson_to_array(ary))),
+
+        &String(ref s) => Some(toml::Value::String(s.clone())),
+        &UtcDatetime(date) => Some(toml::Value::Datetime(format!("{}", date))),
+
+        &FloatingPoint(f) => Some(toml::Value::Float(f)),
+        &I32(i) => Some(toml::Value::Integer(i as i64)),
+        &I64(i) => Some(toml::Value::Integer(i)),
+        &TimeStamp(i) => Some(toml::Value::Integer(i)),
+        &Boolean(b) => Some(toml::Value::Boolean(b)),
+
+        _ => None
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ParseTableBSON(input: &[u8], errors: Option<&mut Option<Box<TomlValue>>>) -> Option<Box<toml::Table>> {
+    use std::io::Cursor;
+
+    match bson::decode_document(&mut Cursor::new(input)) {
+        Ok(data) => Some(box bson_to_table(&data)),
+        Err(err) => {
+            if let Some(errors) = errors {
+                *errors = Some(box toml::Value::String(format!("{}", err)));
+            }
+            None
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn SerializeTableBSON(table: &toml::Table) -> Box<[u8]> {
+    let doc = table_to_bson(table);
+
+    let mut buf = Vec::new();
+    bson::encode_document(&mut buf, &doc).unwrap();
+
+    buf.into_boxed_slice()
+}
+
+#[no_mangle]
+pub extern "C" fn FreeBSONData(_: Option<Box<[u8]>>) {
+    // Let it die
 }
 
