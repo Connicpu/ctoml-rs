@@ -362,13 +362,14 @@ pub extern "C" fn ParseTableBSON(input: &[u8], errors: Option<&mut Option<Box<To
 }
 
 #[no_mangle]
-pub extern "C" fn SerializeTableBSON(table: &toml::Table) -> Box<[u8]> {
+pub extern "C" fn SerializeTableBSON(table: &toml::Table) -> Option<Box<[u8]>> {
     let doc = table_to_bson(table);
 
     let mut buf = Vec::new();
-    bson::encode_document(&mut buf, &doc).unwrap();
-
-    buf.into_boxed_slice()
+    match bson::encode_document(&mut buf, &doc) {
+        Ok(_) => Some(buf.into_boxed_slice()),
+        Err(_) => None,
+    }
 }
 
 #[no_mangle]
