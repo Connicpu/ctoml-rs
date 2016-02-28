@@ -11,3 +11,4 @@ crate_type = ["dylib"]
 toml = "^0.1"
 bson = "^0.1"
 chrono = "^0.2"
+serde_json = "^0.6"

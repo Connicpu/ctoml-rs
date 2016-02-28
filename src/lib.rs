@@ -1,13 +1,19 @@
 #![allow(non_snake_case)]
+#![allow(no_mangle_generic_items)]
 #![feature(box_syntax)]
 
 extern crate toml;
 extern crate bson;
 extern crate chrono;
+extern crate serde_json as json;
 
 use std::mem;
+use std::collections::BTreeMap;
 
 pub type TomlValue = toml::Value;
+
+type JsonTable = BTreeMap<String, json::Value>;
+type JsonArray = Vec<json::Value>;
 
 #[repr(C)]
 pub enum TomlType {
@@ -255,6 +261,122 @@ pub extern "C" fn ArrayPop(array: &mut toml::Array) {
 //////////////////////////////////////////////////////
 // JSON Functions
 
+fn table_to_json(table: &toml::Table) -> JsonTable {
+    let mut json = JsonTable::new();
+    for (key, value) in table {
+        json.insert(key.clone(), toml_to_json(value));
+    }
+    json
+}
+
+fn array_to_json(array: &toml::Array) -> JsonArray {
+    let mut json = JsonArray::new();
+    
+    for value in array {
+        json.push(toml_to_json(value));
+    }
+    
+    json
+}
+
+fn toml_to_json(value: &toml::Value) -> json::Value {
+    use toml::Value::*;
+    use json::Value;
+    
+    match *value {
+        String(ref s) => Value::String(s.clone()),
+        Integer(i) => Value::I64(i),
+        Float(f) => Value::F64(f),
+        Boolean(b) => Value::Bool(b),
+        Datetime(ref d) => Value::String(d.clone()),
+        Array(ref ary) => Value::Array(array_to_json(ary)),
+        Table(ref table) => Value::Object(table_to_json(table)),
+    }
+}
+
+fn json_to_table(json: &JsonTable) -> toml::Table {
+    let mut table = toml::Table::new();
+    
+    for (key, value) in json {
+        match json_to_toml(value) {
+            Some(value) => { table.insert(key.clone(), value); }
+            None => {}
+        }
+    }
+    
+    table
+}
+
+fn json_to_array(json: &JsonArray) -> toml::Array {
+    let mut ary = toml::Array::new();
+    
+    for value in json {
+        match json_to_toml(value) {
+            Some(value) => { ary.push(value); }
+            None => {}
+        }
+    }
+    
+    ary
+}
+
+fn json_to_toml(json: &json::Value) -> Option<toml::Value> {
+    use json::Value::*;
+    use toml::Value;
+    
+    match *json {
+        Null => None,
+        Bool(b) => Some(Value::Boolean(b)),
+        I64(i) => Some(Value::Integer(i)),
+        U64(u) => if u < std::i64::MAX as u64 {
+            Some(Value::Integer(u as i64))
+        } else {
+            Some(Value::Float(u as f64))
+        },
+        F64(f) => Some(Value::Float(f)),
+        String(ref s) => Some(Value::String(s.clone())),
+        Array(ref json) => Some(Value::Array(json_to_array(json))),
+        Object(ref json) => Some(Value::Table(json_to_table(json))),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ParseTableJSON(input: &[u8], errors: Option<&mut Option<Box<TomlValue>>>) -> Option<Box<toml::Table>> {
+    match json::de::from_slice::<json::Value>(input) {
+        Ok(json) => match json_to_toml(&json) {
+            Some(toml::Value::Table(table)) => Some(box table),
+            _ => {
+                if let Some(errors) = errors {
+                    let error = "Json document was not an object at its root";
+                    *errors = Some(box toml::Value::String(error.into()));
+                }
+                None
+            },
+        },
+        Err(err) => {
+            if let Some(errors) = errors {
+                *errors = Some(box toml::Value::String(format!("{}", err)));
+            }
+            None
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn SerializeTableJSON(table: &toml::Table) -> Option<Box<[u8]>> {
+    let json = json::Value::Object(table_to_json(table));
+    
+    match json::ser::to_vec(&json) {
+        Ok(data) => Some(data.into_boxed_slice()),
+        Err(_) => None,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn FreeJSONData(_: Option<Box<[u8]>>) {
+    // Let it die
+}
+
 //////////////////////////////////////////////////////
 // CSON Functions
 
@@ -264,7 +386,7 @@ pub extern "C" fn ArrayPop(array: &mut toml::Array) {
 fn table_to_bson(table: &toml::Table) -> bson::Document {
     let mut doc = bson::Document::new();
 
-    for (k, v) in table.iter() {
+    for (k, v) in table {
         doc.insert(k.clone(), toml_to_bson(v));
     }
 
@@ -274,7 +396,7 @@ fn table_to_bson(table: &toml::Table) -> bson::Document {
 fn array_to_bson(array: &toml::Array) -> bson::Array {
     let mut ary = bson::Array::new();
 
-    for v in array.iter() {
+    for v in array {
         ary.push(toml_to_bson(v));
     }
 
